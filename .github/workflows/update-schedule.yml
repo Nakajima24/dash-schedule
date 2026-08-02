@@ -34,7 +34,9 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Scrape schedule
-        run: python scrape_schedule.py
+        # xvfb-run gives the headful Chromium fallback a virtual
+        # display — headless mode is what Cloudflare detects and blocks.
+        run: xvfb-run -a python scrape_schedule.py
 
       - name: Commit if changed
         run: |
