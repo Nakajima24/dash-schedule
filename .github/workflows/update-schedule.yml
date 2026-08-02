@@ -1,0 +1,42 @@
+name: Update class schedule feed
+
+# Runs on the first day of every month at 09:00 UTC, and on demand from
+# the Actions tab. Commits the JSON files only when something changed.
+on:
+  schedule:
+    - cron: "0 9 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        # Cloudflare fingerprints the TLS handshake; curl_cffi
+        # impersonates Chrome's, which is the only way the fetches
+        # get a 200 instead of a 403.
+        run: pip install curl_cffi
+
+      - name: Scrape schedule
+        run: python scrape_schedule.py
+
+      - name: Commit if changed
+        run: |
+          if [[ -n "$(git status --porcelain -- '*.json')" ]]; then
+            git config user.name  "dash-schedule-bot"
+            git config user.email "actions@github.com"
+            git add ./*.json
+            git commit -m "Monthly class schedule refresh"
+            git push
+          else
+            echo "No changes."
+          fi
