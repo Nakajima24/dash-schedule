@@ -1,0 +1,29 @@
+{
+  "updated": "2026-08-02T20:23:03Z",
+  "terms": [
+    {
+      "code": "M2026",
+      "name": "Summer 2026",
+      "file": "classes-M2026.json",
+      "count": 1082
+    },
+    {
+      "code": "F2026",
+      "name": "Fall 2026",
+      "file": "classes-F2026.json",
+      "count": 2851
+    },
+    {
+      "code": "W2027",
+      "name": "Winter 2027",
+      "file": "classes-W2027.json",
+      "count": 2615
+    },
+    {
+      "code": "S2027",
+      "name": "Spring 2027",
+      "file": "classes-S2027.json",
+      "count": 2529
+    }
+  ]
+}
