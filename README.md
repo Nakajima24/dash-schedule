@@ -43,11 +43,15 @@ kept with `"tba": true` — the app shows those in a separate
 ## Reliability
 
 - deanza.edu sits behind Cloudflare, which fingerprints the TLS
-  handshake — plain `urllib`/`curl` get 403 regardless of headers. The
-  scraper fetches through **curl_cffi** impersonating Chrome (the
-  workflow pip-installs it), which gets a clean 200. If runs start
-  logging mass 403s again, try a newer curl_cffi or a different
-  `impersonate=` target.
+  handshake **and** scores the source IP. The scraper tries
+  **curl_cffi** impersonating Chrome first (enough from residential
+  networks); if that's 403'd — as happens from GitHub's datacenter
+  runners — it switches to **real headless Chromium via Playwright**,
+  which executes Cloudflare's browser challenge and reuses the
+  clearance cookie for the rest of the run. The workflow installs
+  both. If even the browser gets challenged with a CAPTCHA someday,
+  the fallback is running this script from a normal home network
+  (it works unchanged) and pushing the JSON.
 - Each term is isolated: if a term's scrape fails or returns nothing,
   its previous `classes-<TERM>.json` is left untouched rather than
   replaced with an empty file.

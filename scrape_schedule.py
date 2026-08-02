@@ -33,9 +33,12 @@ those under its unscheduled list instead of the timetable grid.
 
 Reliability follows the events relay:
   - deanza.edu sits behind Cloudflare, which fingerprints the TLS
-    handshake — plain urllib/curl get 403 no matter the headers. The
-    fetches go through curl_cffi impersonating Chrome (the workflow
-    pip-installs it); urllib remains only as a long-shot fallback.
+    handshake AND scores the source IP. From residential networks,
+    curl_cffi impersonating Chrome is enough; from GitHub's datacenter
+    runners it can still be 403'd. On the first 403 the scraper
+    switches to a real headless Chromium (Playwright), which executes
+    Cloudflare's challenge like any browser and keeps its clearance
+    cookie for the rest of the run. The workflow installs both.
   - Every term is isolated: if a term's scrape fails or comes back
     empty, the previous run's file for that term is kept as-is rather
     than overwritten with nothing.
@@ -82,19 +85,60 @@ FETCH_DELAY = 0.4
 DAY_POSITIONS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
+# Flipped on after the first Cloudflare 403: every later fetch goes
+# through the headless browser, whose clearance cookie keeps working.
+_use_browser = False
+_browser_page = None
+
+
+def _browser_fetch(url):
+    """Load the page in headless Chromium. A real browser runs
+    Cloudflare's JS challenge; wait for the interstitial to clear."""
+    global _browser_page
+    if _browser_page is None:
+        from playwright.sync_api import sync_playwright
+        pw = sync_playwright().start()
+        browser = pw.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"])
+        context = browser.new_context(locale="en-US")
+        _browser_page = context.new_page()
+        print("Switched to headless-browser fetching.", file=sys.stderr)
+    _browser_page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    for _ in range(15):
+        content = _browser_page.content()
+        if ("Just a moment" not in content
+                and "challenge-platform" not in content
+                and "cf-error-details" not in content):
+            return content
+        _browser_page.wait_for_timeout(2000)
+    raise RuntimeError("Cloudflare challenge did not clear")
+
+
 def fetch(url, fixture=None, retries=2):
     fixtures = os.environ.get("DASH_FIXTURES")
     if fixtures and fixture:
         with open(os.path.join(fixtures, fixture), encoding="utf-8",
                   errors="replace") as f:
             return f.read()
+    global _use_browser
     last = None
     for attempt in range(retries + 1):
         try:
+            if _use_browser:
+                return _browser_fetch(url)
             if cffi_requests is not None:
-                # Chrome TLS impersonation — the only client Cloudflare
-                # lets through here.
+                # Chrome TLS impersonation — enough on well-regarded IPs.
                 resp = cffi_requests.get(url, impersonate="chrome", timeout=30)
+                if resp.status_code == 403:
+                    # IP-reputation block (GitHub runners): escalate to a
+                    # real browser if Playwright is available.
+                    try:
+                        import playwright  # noqa: F401
+                        _use_browser = True
+                        continue
+                    except ImportError:
+                        raise RuntimeError("HTTP 403 (no Playwright fallback)")
                 if resp.status_code != 200:
                     raise RuntimeError(f"HTTP {resp.status_code}")
                 return resp.text
