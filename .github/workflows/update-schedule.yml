@@ -13,6 +13,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # ~340 pages; through the headless-browser fallback a run can take
+    # a while, but nowhere near this ceiling.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -21,10 +24,14 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        # Cloudflare fingerprints the TLS handshake; curl_cffi
-        # impersonates Chrome's, which is the only way the fetches
-        # get a 200 instead of a 403.
-        run: pip install curl_cffi
+        # Cloudflare blocks by TLS fingerprint and IP reputation.
+        # curl_cffi (Chrome TLS impersonation) is tried first; from
+        # GitHub's datacenter IPs that can still be 403'd, so the
+        # scraper falls back to real headless Chromium via Playwright,
+        # which passes Cloudflare's browser challenge.
+        run: |
+          pip install curl_cffi playwright
+          python -m playwright install --with-deps chromium
 
       - name: Scrape schedule
         run: python scrape_schedule.py
