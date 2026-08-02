@@ -92,26 +92,39 @@ _browser_page = None
 
 
 def _browser_fetch(url):
-    """Load the page in headless Chromium. A real browser runs
-    Cloudflare's JS challenge; wait for the interstitial to clear."""
+    """Load the page in real Chromium so Cloudflare's JS challenge can
+    run and clear. Headless mode is fingerprintable (it's what failed on
+    GitHub's runners), so the browser launches headful — under Xvfb on
+    CI, where the workflow wraps the run in xvfb-run."""
     global _browser_page
     if _browser_page is None:
         from playwright.sync_api import sync_playwright
         pw = sync_playwright().start()
         browser = pw.chromium.launch(
-            headless=True,
+            headless=False,
             args=["--disable-blink-features=AutomationControlled"])
-        context = browser.new_context(locale="en-US")
+        context = browser.new_context(
+            locale="en-US",
+            viewport={"width": 1440, "height": 900},
+            timezone_id="America/Los_Angeles")
+        # Chromium under automation still exposes navigator.webdriver;
+        # Cloudflare reads it.
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         _browser_page = context.new_page()
-        print("Switched to headless-browser fetching.", file=sys.stderr)
+        print("Switched to browser fetching.", file=sys.stderr)
     _browser_page.goto(url, wait_until="domcontentloaded", timeout=60000)
-    for _ in range(15):
+    # Managed challenges usually clear in a few seconds; give it up to
+    # ~90s and try one reload halfway in case the first attempt stalled.
+    for attempt in range(30):
         content = _browser_page.content()
         if ("Just a moment" not in content
                 and "challenge-platform" not in content
                 and "cf-error-details" not in content):
             return content
-        _browser_page.wait_for_timeout(2000)
+        if attempt == 15:
+            _browser_page.reload(wait_until="domcontentloaded", timeout=60000)
+        _browser_page.wait_for_timeout(3000)
     raise RuntimeError("Cloudflare challenge did not clear")
 
 
