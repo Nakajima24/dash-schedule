@@ -1,0 +1,54 @@
+name: Update course catalog feed
+
+# Runs monthly (an hour after the schedule feed, so the offered-course set is
+# fresh) and on demand. Commits catalog.json only when it changed. Course
+# descriptions rarely change, so after the first full build the run only
+# fetches detail pages for courses new since last time — keeping it fast.
+on:
+  schedule:
+    - cron: "0 10 1 * *"
+  workflow_dispatch:
+    inputs:
+      refresh_all:
+        description: "Re-fetch every course's detail page (slow)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        # Same Cloudflare handling as the schedule scraper: curl_cffi Chrome
+        # TLS impersonation first, headless Chromium (Playwright) fallback.
+        run: |
+          pip install curl_cffi playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Scrape catalog
+        # xvfb-run gives the headful Chromium fallback a virtual display.
+        env:
+          CATALOG_REFRESH: ${{ inputs.refresh_all && '1' || '' }}
+        run: xvfb-run -a python scrape_catalog.py
+
+      - name: Commit if changed
+        run: |
+          if [[ -n "$(git status --porcelain -- catalog.json)" ]]; then
+            git config user.name  "dash-schedule-bot"
+            git config user.email "actions@github.com"
+            git add catalog.json
+            git commit -m "Monthly course catalog refresh"
+            git push
+          else
+            echo "No changes."
+          fi
