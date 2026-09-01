@@ -1,29 +1,29 @@
 {
-  "updated": "2026-08-02T20:23:03Z",
+  "updated": "2026-09-01T13:50:21Z",
   "terms": [
     {
       "code": "M2026",
       "name": "Summer 2026",
       "file": "classes-M2026.json",
-      "count": 1082
+      "count": 1076
     },
     {
       "code": "F2026",
       "name": "Fall 2026",
       "file": "classes-F2026.json",
-      "count": 2851
+      "count": 2821
     },
     {
       "code": "W2027",
       "name": "Winter 2027",
       "file": "classes-W2027.json",
-      "count": 2615
+      "count": 2606
     },
     {
       "code": "S2027",
       "name": "Spring 2027",
       "file": "classes-S2027.json",
-      "count": 2529
+      "count": 2522
     }
   ]
 }
